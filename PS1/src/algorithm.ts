@@ -19,13 +19,16 @@ import { Flashcard, AnswerDifficulty, BucketMap } from "./flashcards";
  * @spec.requires buckets is a valid representation of flashcard buckets.
  */
 export function toBucketSets(buckets: BucketMap): Array<Set<Flashcard>> {
-  const maxBucket = Math.max(...buckets.keys(), -1);
-  const bucketArray: Array<Set<Flashcard>> = Array.from({ length: maxBucket + 1 }, () => new Set());
-  for (const [bucket, flashcards] of buckets.entries()) {
-    bucketArray[bucket] = flashcards;
-  }
-
-  return bucketArray;
+  if (buckets.size === 0) return [];
+  
+  const maxBucket = Math.max(...buckets.keys());
+  const result = Array.from({length: maxBucket + 1}, () => new Set<Flashcard>());
+  
+  buckets.forEach((cards, bucket) => {
+    result[bucket] = new Set(cards); // Defensive copy
+  });
+  
+  return result;
 }
 
 
@@ -40,9 +43,17 @@ export function toBucketSets(buckets: BucketMap): Array<Set<Flashcard>> {
 export function getBucketRange(
   buckets: Array<Set<Flashcard>>
 ): { minBucket: number; maxBucket: number } | undefined {
-  // TODO: Implement this function
-  // TODO: Implement this function
-  throw new Error("Implement me!");
+  let min = Infinity;
+  let max = -Infinity;
+
+  buckets.forEach((set, index) => {
+    if (set.size > 0) {
+      min = Math.min(min, index);
+      max = Math.max(max, index);
+    }
+  });
+
+  return isFinite(min) ? {minBucket: min, maxBucket: max} : undefined;
 }
 
 /**
@@ -58,8 +69,16 @@ export function practice(
   buckets: Array<Set<Flashcard>>,
   day: number
 ): Set<Flashcard> {
-  // TODO: Implement this function
-  throw new Error("Implement me!");
+  const result = new Set<Flashcard>();
+  const retiredBucket = 5;
+
+  buckets.slice(0, retiredBucket).forEach((set, bucket) => {
+    if (day % (2 ** bucket) === 0) {
+      set.forEach(card => result.add(card));
+    }
+  });
+
+  return result;
 }
 
 /**
@@ -76,8 +95,34 @@ export function update(
   card: Flashcard,
   difficulty: AnswerDifficulty
 ): BucketMap {
-  // TODO: Implement this function
-  throw new Error("Implement me!");
+  const newBuckets = new Map(buckets);
+  let currentBucket: number | undefined;
+
+  // Find current bucket
+  newBuckets.forEach((set, bucket) => {
+    if (set.has(card)) currentBucket = bucket;
+  });
+
+  if (currentBucket === undefined) return newBuckets;
+
+  // Calculate new bucket
+  let newBucket = currentBucket;
+  if (difficulty === AnswerDifficulty.Easy) {
+    newBucket = Math.min(currentBucket + 1, 5);
+  } else if (difficulty === AnswerDifficulty.Hard) {
+    newBucket = Math.max(currentBucket - 1, 0);
+  } else { // Wrong
+    newBucket = 0;
+  }
+
+  // Update buckets
+  newBuckets.get(currentBucket)?.delete(card);
+  if (!newBuckets.has(newBucket)) {
+    newBuckets.set(newBucket, new Set());
+  }
+  newBuckets.get(newBucket)?.add(card);
+
+  return newBuckets;
 }
 
 /**
@@ -88,8 +133,18 @@ export function update(
  * @spec.requires card is a valid Flashcard.
  */
 export function getHint(card: Flashcard): string {
-  // TODO: Implement this function (and strengthen the spec!)
-  throw new Error("Implement me!");
+  if (!card.front.trim()) return "No hint available";
+  
+  const minLength = 3;
+  const words = card.front.split(/\s+/);
+  let hint = "";
+  
+  for (const word of words) {
+    if (hint.length + word.length > minLength * 2) break;
+    hint += (hint ? " " : "") + word;
+  }
+  
+  return hint.length >= minLength ? hint : card.front.slice(0, minLength);
 }
 
 /**
@@ -101,7 +156,15 @@ export function getHint(card: Flashcard): string {
  * @spec.requires [SPEC TO BE DEFINED]
  */
 export function computeProgress(buckets: any, history: any): any {
-  // Replace 'any' with appropriate types
-  // TODO: Implement this function (and define the spec!)
-  throw new Error("Implement me!");
+  let totalCards = 0;
+  let weightedSum = 0;
+
+  // Explicitly type the forEach parameters
+  buckets.forEach((set: Set<Flashcard>, bucket: number) => {
+    const count = set.size;
+    totalCards += count;
+    weightedSum += count * (bucket * 20); // 0→0%, 1→20%, etc.
+  });
+
+  return totalCards > 0 ? Math.round(weightedSum / totalCards) : 0;
 }
